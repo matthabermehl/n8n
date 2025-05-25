@@ -81,25 +81,39 @@ export const getErrorDescriptionFromToolCall = (result: unknown): string | undef
 export const createCallTool =
 	(name: string, client: Client, onError: (error: string | undefined) => void) =>
 	async (args: IDataObject) => {
+		console.log(`[MCP Client Debug] Starting tool call: ${name} with args:`, JSON.stringify(args));
 		let result: Awaited<ReturnType<Client['callTool']>>;
 		try {
-			result = await client.callTool({ name, arguments: args }, CompatibilityCallToolResultSchema);
+			// Add custom timeout of 30 seconds instead of default 60 seconds
+			const startTime = Date.now();
+			result = await client.callTool(
+				{ name, arguments: args },
+				CompatibilityCallToolResultSchema,
+				{ timeout: 30000 }, // 30 seconds timeout
+			);
+			const endTime = Date.now();
+			console.log(`[MCP Client Debug] Tool call ${name} completed in ${endTime - startTime}ms`);
 		} catch (error) {
+			console.log(`[MCP Client Debug] Tool call ${name} failed:`, error);
 			return onError(getErrorDescriptionFromToolCall(error));
 		}
 
 		if (result.isError) {
+			console.log(`[MCP Client Debug] Tool call ${name} returned error:`, result);
 			return onError(getErrorDescriptionFromToolCall(result));
 		}
 
 		if (result.toolResult !== undefined) {
+			console.log(`[MCP Client Debug] Tool call ${name} returned toolResult:`, result.toolResult);
 			return result.toolResult;
 		}
 
 		if (result.content !== undefined) {
+			console.log(`[MCP Client Debug] Tool call ${name} returned content:`, result.content);
 			return result.content;
 		}
 
+		console.log(`[MCP Client Debug] Tool call ${name} returned raw result:`, result);
 		return result;
 	};
 
@@ -222,14 +236,42 @@ export async function connectMcpClient({
 			requestInit: { headers },
 		});
 
+		// Add debugging to the transport
+		const originalOnMessage = transport.onmessage;
+		transport.onmessage = (message) => {
+			console.log('[MCP Client Debug] Received SSE message:', JSON.stringify(message));
+			if (originalOnMessage) {
+				originalOnMessage.call(transport, message);
+			}
+		};
+
+		const originalOnError = transport.onerror;
+		transport.onerror = (error) => {
+			console.log('[MCP Client Debug] SSE transport error:', error);
+			if (originalOnError) {
+				originalOnError.call(transport, error);
+			}
+		};
+
+		const originalOnClose = transport.onclose;
+		transport.onclose = () => {
+			console.log('[MCP Client Debug] SSE transport closed');
+			if (originalOnClose) {
+				originalOnClose.call(transport);
+			}
+		};
+
 		const client = new Client(
 			{ name, version: version.toString() },
 			{ capabilities: { tools: {} } },
 		);
 
+		console.log('[MCP Client Debug] Connecting to SSE endpoint:', endpoint.result.href);
 		await client.connect(transport);
+		console.log('[MCP Client Debug] Successfully connected to MCP server');
 		return createResultOk(client);
 	} catch (error) {
+		console.log('[MCP Client Debug] Connection error:', error);
 		return createResultError({ type: 'connection', error });
 	}
 }
