@@ -9,12 +9,12 @@ import {
 	type IDataObject,
 	type IExecuteFunctions,
 	type Result,
+	type ResultError,
 } from 'n8n-workflow';
 import { type ZodTypeAny } from 'zod';
 
-import { convertJsonSchemaToZod } from '@utils/schemaParsing';
-
 import type { McpAuthenticationOption, McpTool, McpToolIncludeMode } from './types';
+import { convertJsonSchemaToZod } from '../../../utils/schemaParsing';
 
 export async function getAllTools(client: Client, cursor?: string): Promise<McpTool[]> {
 	const { tools, nextCursor } = await client.listTools({ cursor });
@@ -103,7 +103,7 @@ export function mcpToolToDynamicTool(
 	return new DynamicStructuredTool({
 		name: tool.name,
 		description: tool.description ?? '',
-		schema: convertJsonSchemaToZod(tool.inputSchema),
+		schema: convertJsonSchemaToZod(tool.inputSchema as object),
 		func: onCallTool,
 		metadata: { isFromToolkit: true },
 	});
@@ -128,7 +128,7 @@ function normalizeAndValidateUrl(input: string): Result<URL, Error> {
 	const parsedUrl = safeCreateUrl(withProtocol);
 
 	if (!parsedUrl.ok) {
-		return createResultError(parsedUrl.error);
+		return parsedUrl;
 	}
 
 	return parsedUrl;
@@ -152,10 +152,18 @@ export async function connectMcpClient({
 		const endpoint = normalizeAndValidateUrl(sseEndpoint);
 
 		if (!endpoint.ok) {
-			return createResultError({ type: 'invalid_url', error: endpoint.error });
+			return createResultError({
+				type: 'invalid_url',
+				error: (endpoint as ResultError<Error>).error,
+			});
 		}
 
-		const transport = new SSEClientTransport(endpoint.result, {
+		const client = new Client(
+			{ name, version: version.toString() },
+			{ capabilities: { tools: {} } },
+		);
+
+		const sseTransport = new SSEClientTransport(endpoint.result, {
 			eventSourceInit: {
 				fetch: async (url, init) =>
 					await fetch(url, {
@@ -168,13 +176,9 @@ export async function connectMcpClient({
 			},
 			requestInit: { headers },
 		});
+		await client.connect(sseTransport);
+		console.log('Connected using SSE transport');
 
-		const client = new Client(
-			{ name, version: version.toString() },
-			{ capabilities: { tools: {} } },
-		);
-
-		await client.connect(transport);
 		return createResultOk(client);
 	} catch (error) {
 		return createResultError({ type: 'connection', error });
@@ -189,7 +193,7 @@ export async function getAuthHeaders(
 		case 'headerAuth': {
 			const header = await ctx
 				.getCredentials<{ name: string; value: string }>('httpHeaderAuth')
-				.catch(() => null);
+				.catch((): null => null);
 
 			if (!header) return {};
 
@@ -198,7 +202,7 @@ export async function getAuthHeaders(
 		case 'bearerAuth': {
 			const result = await ctx
 				.getCredentials<{ token: string }>('httpBearerAuth')
-				.catch(() => null);
+				.catch((): null => null);
 
 			if (!result) return {};
 
