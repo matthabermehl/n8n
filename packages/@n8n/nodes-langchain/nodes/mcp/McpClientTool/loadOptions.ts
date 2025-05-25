@@ -23,8 +23,17 @@ export async function getTools(this: ILoadOptionsFunctions): Promise<INodeProper
 		throw new NodeOperationError(this.getNode(), 'Could not connect to your MCP server');
 	}
 
-	const tools = await getAllTools(client.result);
-	return tools.map((tool) => ({
+	const toolsArray = await getAllTools(client.result);
+
+	// Defensive check: Ensure toolsArray is an array before calling .map
+	if (!Array.isArray(toolsArray)) {
+		this.logger.warn(
+			`[McpClientTool/loadOptions.ts] getAllTools did not return an array. Received: ${JSON.stringify(toolsArray)}. Returning empty options.`,
+		);
+		return []; // Return empty options to prevent error
+	}
+
+	return toolsArray.map((tool) => ({
 		name: tool.name,
 		value: tool.name,
 		description: tool.description,
