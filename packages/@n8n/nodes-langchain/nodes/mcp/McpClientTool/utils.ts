@@ -12,9 +12,9 @@ import {
 	NodeOperationError, // Import NodeOperationError
 } from 'n8n-workflow';
 import { type ZodTypeAny } from 'zod';
-import { convertJsonSchemaToZod, UnsupportedSchemaError } from '@utils/schemaParsing';
 
 import type { McpAuthenticationOption, McpTool, McpToolIncludeMode } from './types';
+import { convertJsonSchemaToZod, UnsupportedSchemaError } from '../../../utils/schemaParsing';
 
 export async function getAllTools(client: Client, cursor?: string): Promise<McpTool[]> {
 	const response = await client.listTools({ cursor }); // Get the whole response object
@@ -259,6 +259,49 @@ export async function connectMcpClient({
 			if (originalOnClose) {
 				originalOnClose.call(transport);
 			}
+		};
+
+		// Add debugging to the underlying EventSource if available
+		console.log('[MCP Client Debug] Setting up SSE transport debugging...');
+
+		// Monkey patch the transport's start method to add EventSource debugging
+		const originalStart = transport.start.bind(transport);
+		transport.start = async function () {
+			console.log('[MCP Client Debug] Starting SSE transport...');
+			const result = await originalStart();
+
+			// Access the private _eventSource property to add debugging
+			const eventSource = (this as any)._eventSource;
+			if (eventSource) {
+				console.log('[MCP Client Debug] EventSource created, adding event listeners...');
+
+				eventSource.addEventListener('open', () => {
+					console.log('[MCP Client Debug] EventSource opened');
+				});
+
+				eventSource.addEventListener('error', (event: any) => {
+					console.log('[MCP Client Debug] EventSource error:', event);
+				});
+
+				eventSource.addEventListener('message', (event: any) => {
+					console.log('[MCP Client Debug] EventSource message event:', event.data);
+				});
+
+				eventSource.addEventListener('endpoint', (event: any) => {
+					console.log('[MCP Client Debug] EventSource endpoint event:', event.data);
+				});
+
+				// Listen for all events
+				const originalAddEventListener = eventSource.addEventListener.bind(eventSource);
+				eventSource.addEventListener = function (type: string, listener: any, options?: any) {
+					console.log(`[MCP Client Debug] Adding EventSource listener for: ${type}`);
+					return originalAddEventListener(type, listener, options);
+				};
+			} else {
+				console.log('[MCP Client Debug] No EventSource found in transport');
+			}
+
+			return result;
 		};
 
 		const client = new Client(
