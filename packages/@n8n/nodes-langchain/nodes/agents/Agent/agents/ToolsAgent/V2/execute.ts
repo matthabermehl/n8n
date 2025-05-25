@@ -61,6 +61,32 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 
 	const { tools, closeFunctions } = toolsResult;
 
+	// --- BEGIN DEFENSIVE PROGRAMMING ---
+	if (!Array.isArray(tools)) {
+		this.logger.error('[ToolsAgent/V2/execute.ts] tools is not an array!', {
+			toolsType: typeof tools,
+			toolsValue: tools,
+			toolsResultType: typeof toolsResult,
+			toolsResultValue: toolsResult,
+		});
+		throw new NodeOperationError(
+			this.getNode(),
+			`Expected tools to be an array, but got ${typeof tools}. Tools value: ${JSON.stringify(tools)}`,
+		);
+	}
+
+	if (!Array.isArray(closeFunctions)) {
+		this.logger.error('[ToolsAgent/V2/execute.ts] closeFunctions is not an array!', {
+			closeFunctionsType: typeof closeFunctions,
+			closeFunctionsValue: closeFunctions,
+		});
+		throw new NodeOperationError(
+			this.getNode(),
+			`Expected closeFunctions to be an array, but got ${typeof closeFunctions}. Value: ${JSON.stringify(closeFunctions)}`,
+		);
+	}
+	// --- END DEFENSIVE PROGRAMMING ---
+
 	// --- BEGIN DIAGNOSTIC LOGGING ---
 	this.logger.debug(
 		`[ToolsAgent/V2/execute.ts] About to use tools. Array.isArray(tools): ${Array.isArray(tools)}`,
@@ -120,6 +146,10 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 				const prompt: ChatPromptTemplate = preparePrompt(messages);
 
 				// Create the base agent that calls tools.
+				this.logger.debug('[ToolsAgent/V2/execute.ts] About to create agent with tools', {
+					toolsLength: tools.length,
+					toolsIsArray: Array.isArray(tools),
+				});
 				const agent = createToolCallingAgent({
 					llm: model,
 					tools,
@@ -133,6 +163,10 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 					getAgentStepsParser(outputParser, memory),
 					fixEmptyContentMessage,
 				]);
+				this.logger.debug('[ToolsAgent/V2/execute.ts] About to create AgentExecutor with tools', {
+					toolsLength: tools.length,
+					toolsIsArray: Array.isArray(tools),
+				});
 				const executor = AgentExecutor.fromAgentAndTools({
 					agent: runnableAgent,
 					memory,
