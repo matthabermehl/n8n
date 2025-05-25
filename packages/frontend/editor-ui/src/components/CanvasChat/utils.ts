@@ -90,7 +90,26 @@ function extractResponseText(responseData?: IDataObject): string | undefined {
 	const paths = ['output', 'text', 'response.text'];
 	const matchedPath = paths.find((path) => get(responseData, path));
 
-	if (!matchedPath) return JSON.stringify(responseData, null, 2);
+	if (!matchedPath) {
+		// Create a safe copy of responseData for JSON stringification
+		// Exclude or fix problematic properties like 'tools' that might not be arrays
+		const safeResponseData = { ...responseData };
+
+		// If tools exists and is not an array, either convert it or exclude it
+		if ('tools' in safeResponseData) {
+			if (Array.isArray(safeResponseData.tools)) {
+				// Keep it as is if it's already an array
+			} else if (safeResponseData.tools && typeof safeResponseData.tools === 'object') {
+				// Convert object to array or exclude it
+				delete safeResponseData.tools; // Safer to exclude non-array tools
+			} else {
+				// For any other type, exclude it
+				delete safeResponseData.tools;
+			}
+		}
+
+		return JSON.stringify(safeResponseData, null, 2);
+	}
 
 	const matchedOutput = get(responseData, matchedPath);
 	if (typeof matchedOutput === 'object') {
