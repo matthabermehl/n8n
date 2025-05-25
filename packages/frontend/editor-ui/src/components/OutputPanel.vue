@@ -230,7 +230,7 @@ const canPinData = computed(() => {
 
 const allToolsWereUnusedNotice = computed(() => {
 	// Don't show the notice if the node hasn't run yet
-	if (!hasNodeRun.value) return undefined;
+	if (!hasNodeRun.value || !node.value) return undefined;
 
 	// Don't show the notice if the node has pinned data,
 	// we should use historic or current parents, so we don't show the notice,
@@ -244,36 +244,55 @@ const allToolsWereUnusedNotice = computed(() => {
 			1,
 		);
 
-		// Add debugging to track the tools.map error
-		console.log('[OutputPanel Debug] toolsAvailable:', {
-			type: typeof toolsAvailable,
-			isArray: Array.isArray(toolsAvailable),
-			value: toolsAvailable,
-			length: toolsAvailable?.length,
-		});
-
 		// Ensure toolsAvailable is an array before filtering
 		const safeToolsAvailable = Array.isArray(toolsAvailable) ? toolsAvailable : [];
 
+		// If no tools are available, don't show the notice
+		if (safeToolsAvailable.length === 0) {
+			return undefined;
+		}
+
+		// Check if tools were used by examining the AI Agent's execution data
+		const currentNodeRunData = workflowRunData.value?.[node.value.name]?.[props.runIndex];
+
+		if (!currentNodeRunData) {
+			return undefined;
+		}
+
+		// Method 1: Check if intermediateSteps exists and has content
+		const outputData = currentNodeRunData.data?.main?.[0]?.[0]?.json;
+		const hasIntermediateSteps =
+			outputData?.intermediateSteps &&
+			Array.isArray(outputData.intermediateSteps) &&
+			outputData.intermediateSteps.length > 0;
+
+		// Method 2: Check metadata.subRun for tool executions
+		const hasSubRunMetadata =
+			currentNodeRunData.metadata?.subRun &&
+			Array.isArray(currentNodeRunData.metadata.subRun) &&
+			currentNodeRunData.metadata.subRun.length > 0;
+
+		// Method 3: Check if any tool nodes have execution data in this run
 		const toolsUsedInLatestRun = safeToolsAvailable.filter((tool) => {
-			const toolUsed = !!workflowRunData.value?.[tool]?.[props.runIndex];
-			console.log('[OutputPanel Debug] Checking tool usage:', {
-				tool,
-				toolUsed,
-				workflowRunDataKeys: Object.keys(workflowRunData.value || {}),
-				runIndex: props.runIndex,
-			});
-			return toolUsed;
+			return !!workflowRunData.value?.[tool]?.[props.runIndex];
 		});
 
-		console.log('[OutputPanel Debug] Tool usage summary:', {
+		const toolsWereUsed =
+			hasIntermediateSteps || hasSubRunMetadata || toolsUsedInLatestRun.length > 0;
+
+		console.log('[OutputPanel Debug] Tool usage analysis:', {
 			toolsAvailableCount: safeToolsAvailable.length,
-			toolsUsedCount: toolsUsedInLatestRun.length,
-			toolsAvailable: safeToolsAvailable,
-			toolsUsed: toolsUsedInLatestRun,
+			hasIntermediateSteps,
+			hasSubRunMetadata,
+			toolsUsedInLatestRun: toolsUsedInLatestRun.length,
+			toolsWereUsed,
+			outputData: outputData ? Object.keys(outputData) : 'no output data',
+			metadata: currentNodeRunData.metadata
+				? Object.keys(currentNodeRunData.metadata)
+				: 'no metadata',
 		});
 
-		if (safeToolsAvailable.length > 0 && toolsUsedInLatestRun.length === 0) {
+		if (!toolsWereUsed) {
 			return i18n.baseText('ndv.output.noToolUsedInfo');
 		} else {
 			return undefined;
