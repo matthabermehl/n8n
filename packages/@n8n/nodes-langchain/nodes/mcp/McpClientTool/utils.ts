@@ -12,8 +12,6 @@ import {
 	NodeOperationError, // Import NodeOperationError
 } from 'n8n-workflow';
 import { type ZodTypeAny } from 'zod';
-
-// Import UnsupportedSchemaError from @utils/schemaParsing
 import { convertJsonSchemaToZod, UnsupportedSchemaError } from '@utils/schemaParsing';
 
 import type { McpAuthenticationOption, McpTool, McpToolIncludeMode } from './types';
@@ -110,6 +108,19 @@ export function mcpToolToDynamicTool(
 	let zodSchema: ZodTypeAny;
 	try {
 		zodSchema = convertJsonSchemaToZod(tool.inputSchema);
+
+		// Check if the conversion resulted in z.any() when the original schema was not trivial
+		const isActuallyAny = zodSchema._def.typeName === 'ZodAny';
+		const isTrivialOriginalSchema =
+			!tool.inputSchema ||
+			Object.keys(tool.inputSchema).length === 0 ||
+			(typeof tool.inputSchema === 'boolean' && tool.inputSchema === true);
+
+		if (isActuallyAny && !isTrivialOriginalSchema) {
+			throw new UnsupportedSchemaError(
+				`Schema for tool "${tool.name}" was converted to z.any(), indicating an unsupported feature (e.g., 'default' values) or an empty schema that couldn't be processed into a stricter type. Original schema: ${JSON.stringify(tool.inputSchema)}`,
+			);
+		}
 	} catch (error) {
 		// console.warn(`[McpClientTool] Failed to convert JSON schema to Zod for tool "${tool.name}". Schema: ${JSON.stringify(tool.inputSchema)}. Error: ${error.message}`);
 		if (error instanceof UnsupportedSchemaError) {
@@ -120,9 +131,14 @@ export function mcpToolToDynamicTool(
 				// The error will be caught by the node that calls this utility.
 				// For now, create a generic NodeOperationError.
 				// A better approach might be to let McpClientTool.node.ts call this and handle errors.
-				{ name: 'McpClientTool', type: 'mcpClientTool', typeVersion: 1, executeFunctions: {} } as any, // Fake node object
+				{
+					name: 'McpClientTool',
+					type: 'mcpClientTool',
+					typeVersion: 1,
+					executeFunctions: {},
+				} as any, // Fake node object
 				`Failed to prepare tool "${tool.name}": Schema conversion error. ${error.message}. Input schema: ${JSON.stringify(tool.inputSchema)}`,
-				{ itemIndex: 0 } // itemIndex might not be relevant here, but the field is often expected
+				{ itemIndex: 0 }, // itemIndex might not be relevant here, but the field is often expected
 			);
 		}
 		// If it's not an UnsupportedSchemaError, re-throw the original error

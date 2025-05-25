@@ -185,40 +185,65 @@ export function escapeSingleCurlyBrackets(text?: string): string | undefined {
 	return result;
 }
 
+export interface ConnectedToolsResult {
+	tools: Tool[];
+	closeFunctions: Array<() => Promise<void>>;
+}
+
 export const getConnectedTools = async (
 	ctx: IExecuteFunctions | IWebhookFunctions,
 	enforceUniqueNames: boolean,
 	convertStructuredTool: boolean = true,
 	escapeCurlyBrackets: boolean = false,
-) => {
-	const connectedTools = (
-		((await ctx.getInputConnectionData(NodeConnectionTypes.AiTool, 0)) as Array<Toolkit | Tool>) ??
-		[]
-	).flatMap((toolOrToolkit) => {
-		if (toolOrToolkit instanceof Toolkit) {
-			return toolOrToolkit.getTools() as Tool[];
-		}
+): Promise<ConnectedToolsResult> => {
+	const connectedInputs =
+		((await ctx.getInputConnectionData(NodeConnectionTypes.AiTool, 0)) as Array<
+			Toolkit | Tool | { response: Toolkit | Tool; closeFunction: () => Promise<void> }
+		>) ?? [];
 
-		return toolOrToolkit;
+	const toolsAndCloseFunctions = connectedInputs.flatMap((inputOrTool) => {
+		if (
+			inputOrTool &&
+			typeof inputOrTool === 'object' &&
+			'response' in inputOrTool &&
+			'closeFunction' in inputOrTool
+		) {
+			// This is the structure from McpClientTool.node.ts
+			const toolOrToolkit = inputOrTool.response;
+			const closeFunction = inputOrTool.closeFunction as () => Promise<void>; // Type assertion
+			if (toolOrToolkit instanceof Toolkit) {
+				return toolOrToolkit.getTools().map((tool) => ({ tool, closeFunction }));
+			}
+			return [{ tool: toolOrToolkit as Tool, closeFunction }]; // Assert as Tool
+		} else if (inputOrTool instanceof Toolkit) {
+			// Standard Toolkit, no specific close function from this input itself
+			return inputOrTool.getTools().map((tool) => ({ tool, closeFunction: undefined }));
+		}
+		// Standard Tool, no specific close function
+		return [{ tool: inputOrTool as Tool, closeFunction: undefined }]; // Assert as Tool
 	});
 
-	if (!enforceUniqueNames) return connectedTools;
-
+	const finalTools: Tool[] = [];
+	const closeFunctions: Array<() => Promise<void>> = [];
 	const seenNames = new Set<string>();
 
-	const finalTools: Tool[] = [];
+	for (const item of toolsAndCloseFunctions) {
+		if (!item || !item.tool) continue; // Skip if item or item.tool is undefined/null
 
-	for (const tool of connectedTools) {
+		const tool = item.tool;
 		const { name } = tool;
-		if (seenNames.has(name)) {
-			throw new NodeOperationError(
-				ctx.getNode(),
-				`You have multiple tools with the same name: '${name}', please rename them to avoid conflicts`,
-			);
-		}
-		seenNames.add(name);
 
-		if (escapeCurlyBrackets) {
+		if (enforceUniqueNames) {
+			if (seenNames.has(name)) {
+				throw new NodeOperationError(
+					ctx.getNode(),
+					`You have multiple tools with the same name: '${name}', please rename them to avoid conflicts`,
+				);
+			}
+			seenNames.add(name);
+		}
+
+		if (escapeCurlyBrackets && tool.description) {
 			tool.description = escapeSingleCurlyBrackets(tool.description) ?? tool.description;
 		}
 
@@ -227,9 +252,13 @@ export const getConnectedTools = async (
 		} else {
 			finalTools.push(tool);
 		}
+
+		if (item.closeFunction) {
+			closeFunctions.push(item.closeFunction);
+		}
 	}
 
-	return finalTools;
+	return { tools: finalTools, closeFunctions };
 };
 
 /**

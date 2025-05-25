@@ -8,11 +8,11 @@ import type { BaseChatMemory } from 'langchain/memory';
 import { DynamicStructuredTool, type Tool } from 'langchain/tools';
 import { BINARY_ENCODING, jsonParse, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import type { IExecuteFunctions } from 'n8n-workflow';
+import { isChatInstance, getConnectedTools, type ConnectedToolsResult } from '@utils/helpers';
+import { type N8nOutputParser } from '@utils/output_parsers/N8nOutputParser';
 import type { ZodObject } from 'zod';
 import { z } from 'zod';
 
-import { isChatInstance, getConnectedTools } from '@utils/helpers';
-import { type N8nOutputParser } from '@utils/output_parsers/N8nOutputParser';
 /* -----------------------------------------------------------
    Output Parser Helper
 ----------------------------------------------------------- */
@@ -299,8 +299,8 @@ export async function getOptionalMemory(
 export async function getTools(
 	ctx: IExecuteFunctions,
 	outputParser?: N8nOutputParser,
-): Promise<Array<DynamicStructuredTool | Tool>> {
-	const tools = (await getConnectedTools(ctx, true, false)) as Array<DynamicStructuredTool | Tool>;
+): Promise<ConnectedToolsResult> {
+	const { tools, closeFunctions } = await getConnectedTools(ctx, true, false);
 
 	// If an output parser is available, create a dynamic tool to validate the final output.
 	if (outputParser) {
@@ -313,9 +313,9 @@ export async function getTools(
 			// We do not use a function here because we intercept the output with the parser.
 			func: async () => '',
 		});
-		tools.push(structuredOutputParserTool);
+		tools.push(structuredOutputParserTool as Tool);
 	}
-	return tools;
+	return { tools, closeFunctions };
 }
 
 /**
