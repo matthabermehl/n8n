@@ -36,101 +36,116 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 	const returnData: INodeExecutionData[] = [];
 	const items = this.getInputData();
 	const outputParser = await getOptionalOutputParser(this);
-	const tools = await getTools(this, outputParser);
+	const { tools, closeFunctions } = await getTools(this, outputParser);
 
-	for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-		try {
-			const model = await getChatModel(this);
-			const memory = await getOptionalMemory(this);
+	try {
+		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+			try {
+				const model = await getChatModel(this);
+				const memory = await getOptionalMemory(this);
 
-			const input = getPromptInputByType({
-				ctx: this,
-				i: itemIndex,
-				inputKey: 'text',
-				promptTypeKey: 'promptType',
-			});
-			if (input === undefined) {
-				throw new NodeOperationError(this.getNode(), 'The “text” parameter is empty.');
-			}
-
-			const options = this.getNodeParameter('options', itemIndex, {}) as {
-				systemMessage?: string;
-				maxIterations?: number;
-				returnIntermediateSteps?: boolean;
-				passthroughBinaryImages?: boolean;
-			};
-
-			// Prepare the prompt messages and prompt template.
-			const messages = await prepareMessages(this, itemIndex, {
-				systemMessage: options.systemMessage,
-				passthroughBinaryImages: options.passthroughBinaryImages ?? true,
-				outputParser,
-			});
-			const prompt = preparePrompt(messages);
-
-			// Create the base agent that calls tools.
-			const agent = createToolCallingAgent({
-				llm: model,
-				tools,
-				prompt,
-				streamRunnable: false,
-			});
-			agent.streamRunnable = false;
-			// Wrap the agent with parsers and fixes.
-			const runnableAgent = RunnableSequence.from([
-				agent,
-				getAgentStepsParser(outputParser, memory),
-				fixEmptyContentMessage,
-			]);
-			const executor = AgentExecutor.fromAgentAndTools({
-				agent: runnableAgent,
-				memory,
-				tools,
-				returnIntermediateSteps: options.returnIntermediateSteps === true,
-				maxIterations: options.maxIterations ?? 10,
-			});
-
-			// Invoke the executor with the given input and system message.
-			const response = await executor.invoke(
-				{
-					input,
-					system_message: options.systemMessage ?? SYSTEM_MESSAGE,
-					formatting_instructions:
-						'IMPORTANT: For your response to user, you MUST use the `format_final_json_response` tool with your complete answer formatted according to the required schema. Do not attempt to format the JSON manually - always use this tool. Your response will be rejected if it is not properly formatted through this tool. Only use this tool once you are ready to provide your final answer.',
-				},
-				{ signal: this.getExecutionCancelSignal() },
-			);
-
-			// If memory and outputParser are connected, parse the output.
-			if (memory && outputParser) {
-				const parsedOutput = jsonParse<{ output: Record<string, unknown> }>(
-					response.output as string,
-				);
-				response.output = parsedOutput?.output ?? parsedOutput;
-			}
-
-			// Omit internal keys before returning the result.
-			const itemResult = {
-				json: omit(
-					response,
-					'system_message',
-					'formatting_instructions',
-					'input',
-					'chat_history',
-					'agent_scratchpad',
-				),
-			};
-
-			returnData.push(itemResult);
-		} catch (error) {
-			if (this.continueOnFail()) {
-				returnData.push({
-					json: { error: error.message },
-					pairedItem: { item: itemIndex },
+				const input = getPromptInputByType({
+					ctx: this,
+					i: itemIndex,
+					inputKey: 'text',
+					promptTypeKey: 'promptType',
 				});
-				continue;
+				if (input === undefined) {
+					throw new NodeOperationError(this.getNode(), 'The "text" parameter is empty.');
+				}
+
+				const options = this.getNodeParameter('options', itemIndex, {}) as {
+					systemMessage?: string;
+					maxIterations?: number;
+					returnIntermediateSteps?: boolean;
+					passthroughBinaryImages?: boolean;
+				};
+
+				// Prepare the prompt messages and prompt template.
+				const messages = await prepareMessages(this, itemIndex, {
+					systemMessage: options.systemMessage,
+					passthroughBinaryImages: options.passthroughBinaryImages ?? true,
+					outputParser,
+				});
+				const prompt = preparePrompt(messages);
+
+				// Create the base agent that calls tools.
+				const agent = createToolCallingAgent({
+					llm: model,
+					tools,
+					prompt,
+					streamRunnable: false,
+				});
+				agent.streamRunnable = false;
+				// Wrap the agent with parsers and fixes.
+				const runnableAgent = RunnableSequence.from([
+					agent,
+					getAgentStepsParser(outputParser, memory),
+					fixEmptyContentMessage,
+				]);
+				const executor = AgentExecutor.fromAgentAndTools({
+					agent: runnableAgent,
+					memory,
+					tools,
+					returnIntermediateSteps: options.returnIntermediateSteps === true,
+					maxIterations: options.maxIterations ?? 10,
+				});
+
+				// Invoke the executor with the given input and system message.
+				const response = await executor.invoke(
+					{
+						input,
+						system_message: options.systemMessage ?? SYSTEM_MESSAGE,
+						formatting_instructions:
+							'IMPORTANT: For your response to user, you MUST use the `format_final_json_response` tool with your complete answer formatted according to the required schema. Do not attempt to format the JSON manually - always use this tool. Your response will be rejected if it is not properly formatted through this tool. Only use this tool once you are ready to provide your final answer.',
+					},
+					{ signal: this.getExecutionCancelSignal() },
+				);
+
+				// If memory and outputParser are connected, parse the output.
+				if (memory && outputParser) {
+					const parsedOutput = jsonParse<{ output: Record<string, unknown> }>(
+						response.output as string,
+					);
+					response.output = parsedOutput?.output ?? parsedOutput;
+				}
+
+				// Omit internal keys before returning the result.
+				const itemResult = {
+					json: omit(
+						response,
+						'system_message',
+						'formatting_instructions',
+						'input',
+						'chat_history',
+						'agent_scratchpad',
+					),
+				};
+
+				returnData.push(itemResult);
+			} catch (error) {
+				if (this.continueOnFail()) {
+					returnData.push({
+						json: { error: error.message },
+						pairedItem: { item: itemIndex },
+					});
+					continue;
+				}
+				throw error;
 			}
-			throw error;
+		}
+	} finally {
+		// Close MCP connections
+		this.logger.info(
+			`ToolsAgent V1 execution finished. Closing ${closeFunctions.length} toolkit connections.`,
+		);
+		for (const close of closeFunctions) {
+			try {
+				await close();
+				this.logger.debug('Successfully closed toolkit connection.');
+			} catch (e: any) {
+				this.logger.error(`Error closing toolkit connection: ${e.message}`, { error: e });
+			}
 		}
 	}
 
