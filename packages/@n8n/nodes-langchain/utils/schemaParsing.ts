@@ -1,4 +1,4 @@
-import { jsonSchemaToZod } from '@n8n/json-schema-to-zod';
+import { jsonSchemaToZod, UnsupportedSchemaError } from '@n8n/json-schema-to-zod'; // Added UnsupportedSchemaError here
 import { json as generateJsonSchema } from 'generate-schema';
 import type { SchemaObject } from 'generate-schema';
 import type { JSONSchema7 } from 'json-schema';
@@ -25,3 +25,6 @@ export function throwIfToolSchema(ctx: IExecuteFunctions, error: Error) {
 		);
 	}
 }
+
+// Re-export UnsupportedSchemaError so it's available to importers of this module
+export { UnsupportedSchemaError };
