@@ -17,13 +17,20 @@ import { convertJsonSchemaToZod, UnsupportedSchemaError } from '@utils/schemaPar
 import type { McpAuthenticationOption, McpTool, McpToolIncludeMode } from './types';
 
 export async function getAllTools(client: Client, cursor?: string): Promise<McpTool[]> {
-	const { tools, nextCursor } = await client.listTools({ cursor });
+	const response = await client.listTools({ cursor }); // Get the whole response object
+	// Ensure response.tools is an array, default to empty array if not, or if response.tools is undefined
+	const currentTools = Array.isArray(response.tools) ? response.tools : [];
+	const nextCursor = response.nextCursor;
 
 	if (nextCursor) {
-		return (tools as McpTool[]).concat(await getAllTools(client, nextCursor));
+		// Recursively get tools from the next page
+		const nextTools = await getAllTools(client, nextCursor);
+		// Concatenate current page's tools (now guaranteed to be an array) with next page's tools
+		return (currentTools as McpTool[]).concat(nextTools);
 	}
 
-	return tools as McpTool[];
+	// Return current page's tools (guaranteed to be an array)
+	return currentTools as McpTool[];
 }
 
 export function getSelectedTools({
