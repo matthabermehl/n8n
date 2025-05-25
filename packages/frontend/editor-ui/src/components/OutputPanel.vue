@@ -229,24 +229,57 @@ const canPinData = computed(() => {
 });
 
 const allToolsWereUnusedNotice = computed(() => {
-	if (!node.value || runsCount.value === 0 || hasError.value) return undefined;
+	// Don't show the notice if the node hasn't run yet
+	if (!hasNodeRun.value) return undefined;
 
-	// With pinned data there's no clear correct answer for whether
+	// Don't show the notice if the node has pinned data,
 	// we should use historic or current parents, so we don't show the notice,
 	// as it likely ends up unactionable noise to the user
 	if (pinnedData.hasData.value) return undefined;
 
-	const toolsAvailable = props.workflow.getParentNodes(
-		node.value.name,
-		NodeConnectionTypes.AiTool,
-		1,
-	);
-	const toolsUsedInLatestRun = toolsAvailable.filter(
-		(tool) => !!workflowRunData.value?.[tool]?.[props.runIndex],
-	);
-	if (toolsAvailable.length > 0 && toolsUsedInLatestRun.length === 0) {
-		return i18n.baseText('ndv.output.noToolUsedInfo');
-	} else {
+	try {
+		const toolsAvailable = props.workflow.getParentNodes(
+			node.value.name,
+			NodeConnectionTypes.AiTool,
+			1,
+		);
+
+		// Add debugging to track the tools.map error
+		console.log('[OutputPanel Debug] toolsAvailable:', {
+			type: typeof toolsAvailable,
+			isArray: Array.isArray(toolsAvailable),
+			value: toolsAvailable,
+			length: toolsAvailable?.length,
+		});
+
+		// Ensure toolsAvailable is an array before filtering
+		const safeToolsAvailable = Array.isArray(toolsAvailable) ? toolsAvailable : [];
+
+		const toolsUsedInLatestRun = safeToolsAvailable.filter((tool) => {
+			const toolUsed = !!workflowRunData.value?.[tool]?.[props.runIndex];
+			console.log('[OutputPanel Debug] Checking tool usage:', {
+				tool,
+				toolUsed,
+				workflowRunDataKeys: Object.keys(workflowRunData.value || {}),
+				runIndex: props.runIndex,
+			});
+			return toolUsed;
+		});
+
+		console.log('[OutputPanel Debug] Tool usage summary:', {
+			toolsAvailableCount: safeToolsAvailable.length,
+			toolsUsedCount: toolsUsedInLatestRun.length,
+			toolsAvailable: safeToolsAvailable,
+			toolsUsed: toolsUsedInLatestRun,
+		});
+
+		if (safeToolsAvailable.length > 0 && toolsUsedInLatestRun.length === 0) {
+			return i18n.baseText('ndv.output.noToolUsedInfo');
+		} else {
+			return undefined;
+		}
+	} catch (error) {
+		console.error('[OutputPanel Debug] Error in allToolsWereUnusedNotice:', error);
 		return undefined;
 	}
 });
