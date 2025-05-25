@@ -40,6 +40,24 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 	// Destructure tools and closeFunctions from the result of getTools
 	const { tools, closeFunctions } = await getTools(this, outputParser);
 
+	// --- BEGIN DIAGNOSTIC LOGGING ---
+	this.logger.debug(
+		`[ToolsAgent/V2/execute.ts] About to use tools. Array.isArray(tools): ${Array.isArray(tools)}`,
+	);
+	if (Array.isArray(tools)) {
+		this.logger.debug(
+			`[ToolsAgent/V2/execute.ts] Tools being passed to LangChain: ${JSON.stringify(
+				tools.map((t) => ({
+					name: t.name,
+					description: t.description,
+					// schema: JSON.stringify(t.schema), // Schema can be verbose
+					constructorName: t.constructor?.name,
+				})),
+			)}`,
+		);
+	}
+	// --- END DIAGNOSTIC LOGGING ---
+
 	const batchSize = this.getNodeParameter('options.batching.batchSize', 0, 1) as number;
 	const delayBetweenBatches = this.getNodeParameter(
 		'options.batching.delayBetweenBatches',
