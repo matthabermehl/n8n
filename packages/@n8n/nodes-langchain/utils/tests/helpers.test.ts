@@ -238,8 +238,8 @@ describe('getConnectedTools', () => {
 	it('should return empty array when no tools are connected', async () => {
 		mockExecuteFunctions.getInputConnectionData = jest.fn().mockResolvedValue([]);
 
-		const tools = await getConnectedTools(mockExecuteFunctions, true);
-		expect(tools).toEqual([]);
+		const result = await getConnectedTools(mockExecuteFunctions, true);
+		expect(result).toEqual({ tools: [], closeFunctions: [] });
 	});
 
 	it('should return tools without modification when enforceUniqueNames is false', async () => {
@@ -250,8 +250,8 @@ describe('getConnectedTools', () => {
 
 		mockExecuteFunctions.getInputConnectionData = jest.fn().mockResolvedValue(mockTools);
 
-		const tools = await getConnectedTools(mockExecuteFunctions, false);
-		expect(tools).toEqual(mockTools);
+		const result = await getConnectedTools(mockExecuteFunctions, false);
+		expect(result).toEqual({ tools: mockTools, closeFunctions: [] });
 	});
 
 	it('should throw error when duplicate tool names exist and enforceUniqueNames is true', async () => {
@@ -270,8 +270,8 @@ describe('getConnectedTools', () => {
 
 		mockExecuteFunctions.getInputConnectionData = jest.fn().mockResolvedValue(mockTools);
 
-		const tools = await getConnectedTools(mockExecuteFunctions, true, false, true);
-		expect(tools[0].description).toBe('Test {{value}}');
+		const result = await getConnectedTools(mockExecuteFunctions, true, false, true);
+		expect(result.tools[0].description).toBe('Test {{value}}');
 	});
 
 	it('should convert N8nTool to dynamic tool when convertStructuredTool is true', async () => {
@@ -285,16 +285,16 @@ describe('getConnectedTools', () => {
 
 		mockExecuteFunctions.getInputConnectionData = jest.fn().mockResolvedValue([mockN8nTool]);
 
-		const tools = await getConnectedTools(mockExecuteFunctions, true, true);
+		const result = await getConnectedTools(mockExecuteFunctions, true, true);
 		expect(asDynamicToolSpy).toHaveBeenCalled();
-		expect(tools[0]).toEqual(mockDynamicTool);
+		expect(result.tools[0]).toEqual(mockDynamicTool);
 	});
 
 	it('should not convert N8nTool when convertStructuredTool is false', async () => {
 		mockExecuteFunctions.getInputConnectionData = jest.fn().mockResolvedValue([mockN8nTool]);
 
-		const tools = await getConnectedTools(mockExecuteFunctions, true, false);
-		expect(tools[0]).toBe(mockN8nTool);
+		const result = await getConnectedTools(mockExecuteFunctions, true, false);
+		expect(result.tools[0]).toBe(mockN8nTool);
 	});
 
 	it('should flatten tools from a toolkit', async () => {
@@ -317,8 +317,8 @@ describe('getConnectedTools', () => {
 
 		mockExecuteFunctions.getInputConnectionData = jest.fn().mockResolvedValue(mockTools);
 
-		const tools = await getConnectedTools(mockExecuteFunctions, false);
-		expect(tools).toEqual([
+		const result = await getConnectedTools(mockExecuteFunctions, false);
+		expect(result.tools).toEqual([
 			{ name: 'tool1', description: 'desc1' },
 			{ name: 'toolkitTool1', description: 'toolkitToolDesc1' },
 			{ name: 'toolkitTool2', description: 'toolkitToolDesc2' },

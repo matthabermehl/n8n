@@ -38,7 +38,9 @@ describe('toolsAgentExecute', () => {
 		mockContext.getInputConnectionData.mockResolvedValue(mockModel);
 
 		const mockTools = [mock<Tool>()];
-		jest.spyOn(helpers, 'getConnectedTools').mockResolvedValue(mockTools);
+		jest
+			.spyOn(helpers, 'getConnectedTools')
+			.mockResolvedValue({ tools: mockTools, closeFunctions: [] });
 
 		// Mock getNodeParameter to return default values
 		mockContext.getNodeParameter.mockImplementation((param, _i, defaultValue) => {
@@ -89,7 +91,9 @@ describe('toolsAgentExecute', () => {
 		mockContext.getInputConnectionData.mockResolvedValue(mockModel);
 
 		const mockTools = [mock<Tool>()];
-		jest.spyOn(helpers, 'getConnectedTools').mockResolvedValue(mockTools);
+		jest
+			.spyOn(helpers, 'getConnectedTools')
+			.mockResolvedValue({ tools: mockTools, closeFunctions: [] });
 
 		mockContext.getNodeParameter.mockImplementation((param, _i, defaultValue) => {
 			if (param === 'options.batching.batchSize') return 2;
@@ -142,7 +146,9 @@ describe('toolsAgentExecute', () => {
 		mockContext.getInputConnectionData.mockResolvedValue(mockModel);
 
 		const mockTools = [mock<Tool>()];
-		jest.spyOn(helpers, 'getConnectedTools').mockResolvedValue(mockTools);
+		jest
+			.spyOn(helpers, 'getConnectedTools')
+			.mockResolvedValue({ tools: mockTools, closeFunctions: [] });
 
 		mockContext.getNodeParameter.mockImplementation((param, _i, defaultValue) => {
 			if (param === 'options.batching.batchSize') return 2;
@@ -191,7 +197,9 @@ describe('toolsAgentExecute', () => {
 		mockContext.getInputConnectionData.mockResolvedValue(mockModel);
 
 		const mockTools = [mock<Tool>()];
-		jest.spyOn(helpers, 'getConnectedTools').mockResolvedValue(mockTools);
+		jest
+			.spyOn(helpers, 'getConnectedTools')
+			.mockResolvedValue({ tools: mockTools, closeFunctions: [] });
 
 		mockContext.getNodeParameter.mockImplementation((param, _i, defaultValue) => {
 			if (param === 'options.batching.batchSize') return 2;

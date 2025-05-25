@@ -56,6 +56,9 @@ export type JsonSchemaObject = {
 	const?: Serializable;
 	enum?: Serializable[];
 
+	// references
+	$ref?: string;
+
 	errorMessage?: { [key: string]: string | undefined };
 
 	description?: string;

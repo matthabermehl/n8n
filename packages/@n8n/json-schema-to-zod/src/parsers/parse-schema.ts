@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { parseAllOf } from './parse-all-of';
+import { parseAllOf, originalIndex } from './parse-all-of';
 import { parseAnyOf } from './parse-any-of';
 import { parseArray } from './parse-array';
 import { parseBoolean } from './parse-boolean';
@@ -15,6 +15,7 @@ import { parseNullable } from './parse-nullable';
 import { parseNumber } from './parse-number';
 import { parseObject } from './parse-object';
 import { parseOneOf } from './parse-one-of';
+import { parseRef } from './parse-ref';
 import { parseString } from './parse-string';
 import type { ParserSelector, Refs, JsonSchemaObject, JsonSchema } from '../types';
 import { its } from '../utils/its';
@@ -44,7 +45,9 @@ const addAnnotations = (jsonSchema: JsonSchemaObject, zodSchema: z.ZodTypeAny): 
 };
 
 const selectParser: ParserSelector = (schema, refs) => {
-	if (its.a.nullable(schema)) {
+	if (its.a.ref(schema)) {
+		return parseRef(schema, refs);
+	} else if (its.a.nullable(schema)) {
 		return parseNullable(schema, refs);
 	} else if (its.an.object(schema)) {
 		return parseObject(schema, refs);
@@ -85,6 +88,21 @@ export const parseSchema = (
 	blockMeta?: boolean,
 ): z.ZodTypeAny => {
 	if (typeof jsonSchema !== 'object') return jsonSchema ? z.any() : z.never();
+
+	// Handle empty objects and objects that only contain the originalIndex symbol
+	const keys = Object.getOwnPropertyNames(jsonSchema);
+	const symbols = Object.getOwnPropertySymbols(jsonSchema);
+
+	// Empty object {} should be treated as z.any() per JSON Schema spec
+	if (keys.length === 0 && symbols.length === 0) {
+		return z.any();
+	}
+
+	// Handle objects that only contain the originalIndex symbol (transformed from boolean true)
+	if (keys.length === 0 && symbols.length === 1 && symbols[0] === originalIndex) {
+		// This is a transformed boolean true value from parseAllOf, treat as z.any()
+		return z.any();
+	}
 
 	if (refs.parserOverride) {
 		const custom = refs.parserOverride(jsonSchema, refs);

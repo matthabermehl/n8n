@@ -53,5 +53,10 @@ export const its = {
 		): x is JsonSchemaObject & {
 			oneOf: JsonSchema[];
 		} => x.oneOf !== undefined,
+		ref: (
+			x: JsonSchemaObject,
+		): x is JsonSchemaObject & {
+			$ref: string;
+		} => x.$ref !== undefined,
 	},
 };

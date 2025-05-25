@@ -201,21 +201,12 @@ export const getConnectedTools = async (
 			Toolkit | Tool | { response: Toolkit | Tool; closeFunction: () => Promise<void> }
 		>) ?? [];
 
-	// --- BEGIN DEBUGGING ---
-	ctx.logger.debug('[getConnectedTools] Processing connected inputs', {
-		inputCount: connectedInputs.length,
-		inputTypes: connectedInputs.map((input, i) => ({
-			index: i,
-			type: typeof input,
-			isToolkit: input instanceof Toolkit,
-			hasResponse: input && typeof input === 'object' && 'response' in input,
-			hasCloseFunction: input && typeof input === 'object' && 'closeFunction' in input,
-			constructor: input?.constructor?.name,
-		})),
-	});
-	// --- END DEBUGGING ---
+	const toolsAndCloseFunctions: Array<{
+		tool: Tool;
+		closeFunction: (() => Promise<void>) | undefined;
+	}> = [];
 
-	const toolsAndCloseFunctions = connectedInputs.flatMap((inputOrTool) => {
+	for (const inputOrTool of connectedInputs) {
 		if (
 			inputOrTool &&
 			typeof inputOrTool === 'object' &&
@@ -224,55 +215,34 @@ export const getConnectedTools = async (
 		) {
 			// This is the structure from McpClientTool.node.ts
 			const toolOrToolkit = inputOrTool.response;
-			const closeFunction = inputOrTool.closeFunction as () => Promise<void>; // Type assertion
-
-			// --- BEGIN DEBUGGING ---
-			ctx.logger.debug('[getConnectedTools] Processing MCP toolkit structure', {
-				toolOrToolkitType: typeof toolOrToolkit,
-				isToolkit: toolOrToolkit instanceof Toolkit,
-				toolkitName: toolOrToolkit instanceof Toolkit ? toolOrToolkit.constructor.name : 'N/A',
-				hasCloseFunction: typeof closeFunction === 'function',
-			});
-			// --- END DEBUGGING ---
+			const closeFunction = inputOrTool.closeFunction as () => Promise<void>;
 
 			if (toolOrToolkit instanceof Toolkit) {
 				const tools = toolOrToolkit.getTools();
-				// --- BEGIN DEBUGGING ---
-				ctx.logger.debug('[getConnectedTools] Extracted tools from MCP toolkit', {
-					toolCount: tools.length,
-					toolNames: tools.map((t) => t.name),
-				});
-				// --- END DEBUGGING ---
-				return tools.map((tool) => ({ tool, closeFunction }));
+				for (const tool of tools) {
+					toolsAndCloseFunctions.push({ tool, closeFunction });
+				}
+			} else {
+				toolsAndCloseFunctions.push({ tool: toolOrToolkit as Tool, closeFunction });
 			}
-			return [{ tool: toolOrToolkit as Tool, closeFunction }]; // Assert as Tool
 		} else if (inputOrTool instanceof Toolkit) {
 			// Standard Toolkit, no specific close function from this input itself
 			const tools = inputOrTool.getTools();
-			// --- BEGIN DEBUGGING ---
-			ctx.logger.debug('[getConnectedTools] Processing standard toolkit', {
-				toolCount: tools.length,
-				toolNames: tools.map((t) => t.name),
-			});
-			// --- END DEBUGGING ---
-			return tools.map((tool) => ({ tool, closeFunction: undefined }));
+			for (const tool of tools) {
+				toolsAndCloseFunctions.push({ tool, closeFunction: undefined });
+			}
+		} else {
+			// Standard Tool, no specific close function
+			toolsAndCloseFunctions.push({ tool: inputOrTool as Tool, closeFunction: undefined });
 		}
-		// Standard Tool, no specific close function
-		// --- BEGIN DEBUGGING ---
-		ctx.logger.debug('[getConnectedTools] Processing standard tool', {
-			toolName: (inputOrTool as Tool)?.name || 'unknown',
-			toolType: typeof inputOrTool,
-		});
-		// --- END DEBUGGING ---
-		return [{ tool: inputOrTool as Tool, closeFunction: undefined }]; // Assert as Tool
-	});
+	}
 
 	const finalTools: Tool[] = [];
 	const closeFunctions: Array<() => Promise<void>> = [];
 	const seenNames = new Set<string>();
 
 	for (const item of toolsAndCloseFunctions) {
-		if (!item || !item.tool) continue; // Skip if item or item.tool is undefined/null
+		if (!item?.tool) continue; // Skip if item or item.tool is undefined/null
 
 		const tool = item.tool;
 		const { name } = tool;
@@ -301,14 +271,6 @@ export const getConnectedTools = async (
 			closeFunctions.push(item.closeFunction);
 		}
 	}
-
-	// --- BEGIN DEBUGGING ---
-	ctx.logger.debug('[getConnectedTools] Final result', {
-		finalToolCount: finalTools.length,
-		finalToolNames: finalTools.map((t) => t.name),
-		closeFunctionCount: closeFunctions.length,
-	});
-	// --- END DEBUGGING ---
 
 	return { tools: finalTools, closeFunctions };
 };

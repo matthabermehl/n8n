@@ -10,7 +10,6 @@ import type { IExecuteFunctions, INode } from 'n8n-workflow';
 import { NodeOperationError, BINARY_ENCODING, NodeConnectionTypes } from 'n8n-workflow';
 import type { ZodType } from 'zod';
 import { z } from 'zod';
-
 import type { N8nOutputParser } from '@utils/output_parsers/N8nOutputParser';
 
 import {
@@ -184,17 +183,17 @@ describe('getTools', () => {
 	});
 
 	it('should retrieve tools without appending if outputParser is not provided', async () => {
-		const tools = await getTools(mockContext);
+		const result = await getTools(mockContext);
 
-		expect(tools.length).toEqual(1);
+		expect(result.tools.length).toEqual(1);
 	});
 
 	it('should retrieve tools and append the structured output parser tool if outputParser is provided', async () => {
 		const fakeOutputParser = getFakeOutputParser(z.object({ text: z.string() }));
-		const tools = await getTools(mockContext, fakeOutputParser);
+		const result = await getTools(mockContext, fakeOutputParser);
 		// Our fake getConnectedTools returns one tool; with outputParser, one extra is appended.
-		expect(tools.length).toEqual(2);
-		const dynamicTool = tools.find((t) => t.name === 'format_final_json_response');
+		expect(result.tools.length).toEqual(2);
+		const dynamicTool = result.tools.find((t) => t.name === 'format_final_json_response');
 		expect(dynamicTool).toBeDefined();
 	});
 });

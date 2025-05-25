@@ -4,7 +4,7 @@ import { parseSchema } from './parse-schema';
 import type { JsonSchemaObject, JsonSchema, Refs } from '../types';
 import { half } from '../utils/half';
 
-const originalIndex = Symbol('Original index');
+export const originalIndex = Symbol('Original index');
 
 const ensureOriginalIndex = (arr: JsonSchema[]) => {
 	const newArr = [];

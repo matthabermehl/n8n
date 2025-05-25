@@ -131,7 +131,7 @@ export function mcpToolToDynamicTool(
 		zodSchema = convertJsonSchemaToZod(tool.inputSchema);
 
 		// Check if the conversion resulted in z.any() when the original schema was not trivial
-		const isActuallyAny = zodSchema._def.typeName === 'ZodAny';
+		const isActuallyAny = zodSchema._def?.typeName === 'ZodAny';
 		const isTrivialOriginalSchema =
 			!tool.inputSchema ||
 			Object.keys(tool.inputSchema).length === 0 ||
