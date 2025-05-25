@@ -38,7 +38,28 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 	const outputParser = await getOptionalOutputParser(this);
 
 	// Destructure tools and closeFunctions from the result of getTools
-	const { tools, closeFunctions } = await getTools(this, outputParser);
+	const toolsResult = await getTools(this, outputParser);
+
+	// --- BEGIN ENHANCED DIAGNOSTIC LOGGING ---
+	this.logger.debug('[ToolsAgent/V2/execute.ts] getTools returned:', {
+		type: typeof toolsResult,
+		isObject: typeof toolsResult === 'object' && toolsResult !== null,
+		hasToolsProperty: toolsResult && 'tools' in toolsResult,
+		hasCloseFunctionsProperty: toolsResult && 'closeFunctions' in toolsResult,
+		toolsType: toolsResult?.tools ? typeof toolsResult.tools : 'undefined',
+		toolsIsArray: Array.isArray(toolsResult?.tools),
+		toolsLength: Array.isArray(toolsResult?.tools) ? toolsResult.tools.length : 'N/A',
+		closeFunctionsType: toolsResult?.closeFunctions
+			? typeof toolsResult.closeFunctions
+			: 'undefined',
+		closeFunctionsIsArray: Array.isArray(toolsResult?.closeFunctions),
+		closeFunctionsLength: Array.isArray(toolsResult?.closeFunctions)
+			? toolsResult.closeFunctions.length
+			: 'N/A',
+	});
+	// --- END ENHANCED DIAGNOSTIC LOGGING ---
+
+	const { tools, closeFunctions } = toolsResult;
 
 	// --- BEGIN DIAGNOSTIC LOGGING ---
 	this.logger.debug(
